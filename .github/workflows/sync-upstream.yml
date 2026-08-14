@@ -1,0 +1,43 @@
+name: Sync upstream main
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge xai-org/grok-build main
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/xai-org/grok-build.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "already contains upstream/main"
+            exit 0
+          fi
+          # A conflict means an overlay file leaked onto an upstream path.
+          # Do not use -X ours / -X theirs.
+          git merge --no-edit --no-ff upstream/main
+          bash extensions/scripts/check-upstream-untouched.sh
+          git push origin HEAD:main
